@@ -25,11 +25,22 @@ from object_segmentor.fastsam_segmentor import FastSAMSegmentor
 from object_segmentor.mobilesam_segmentor import MobileSAMSegmentor
 from object_segmentor.object_segmentor_base import ObjectSegmentorBase
 from object_segmentor.visualization import colorize_label_mask
+from reconstruction_3d.back_projector import BackProjector
+from reconstruction_3d.object_tracker import Tracker
 
 # Loaded automatically by main() if the caller doesn't supply its own
 # --ros-args --params-file / -p overrides (which still take precedence).
 DEFAULT_PARAMS_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'config', 'params.yaml')
+
+
+def _quat_to_matrix(q) -> np.ndarray:
+    x, y, z, w = q.x, q.y, q.z, q.w
+    return np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ])
 
 
 class MappingNode(Node):
@@ -71,7 +82,19 @@ class MappingNode(Node):
 
         self.bridge = CvBridge()
 
-        # Reserved for future depth/odom/IMU fusion; not yet consumed here.
+        self.back_projector = BackProjector(
+            fx=self.get_parameter('fx').value,
+            fy=self.get_parameter('fy').value,
+            cx=self.get_parameter('cx').value,
+            cy=self.get_parameter('cy').value,
+        )
+        self.tracker = Tracker(
+            output_dir=self.get_parameter('objects_output_dir').value,
+            gate=self.get_parameter('track_gate_m').value,
+        )
+
+        # _latest_odom is consumed for 3D back-projection/tracking below;
+        # _latest_imu is reserved for future fusion, not yet consumed.
         self._latest_depth = None
         self._latest_odom = None
         self._latest_imu = None
@@ -132,6 +155,17 @@ class MappingNode(Node):
             # self._save_mask(header, (label_mask.astype(np.float32) / label_mask.max() * 255).astype(np.uint8))
             color = colorize_label_mask(label_mask)
             self._save_mask(header, color)
+
+            depth_msg, odom_msg = self._latest_depth, self._latest_odom
+            if depth_msg is not None and odom_msg is not None:
+                depth_m = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding='32FC1')
+                pose = odom_msg.pose.pose
+                R = _quat_to_matrix(pose.orientation)
+                t = np.array([pose.position.x, pose.position.y, pose.position.z])
+                timestamp = header.stamp.sec + header.stamp.nanosec * 1e-9
+
+                detections = self.back_projector.project(label_mask, depth_m)
+                self.tracker.update(detections, R, t, timestamp, bgr_image, label_mask)
 
     def _publish_mask(self, header, label_mask: np.ndarray):
         msg = self.bridge.cv2_to_imgmsg(label_mask.astype(np.uint16), encoding='mono16')

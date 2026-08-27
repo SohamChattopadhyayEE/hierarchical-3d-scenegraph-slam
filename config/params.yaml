@@ -23,7 +23,7 @@ dataset_streamer:
     # dataset_path is intentionally omitted: it defaults to the
     # rgbd_dataset_freiburg1_desk folder next to ros2_streamer.py. Set it
     # here (or via -p dataset_path:=...) to point at a different dataset.
-    playback_rate: 1.0
+    playback_rate: 0.4
     loop: false
     depth_scale: 5000.0
     camera_frame_id: camera_rgb_optical_frame
@@ -44,7 +44,7 @@ mapping_node:
     # auto-downloaded on first use; point this at a local .pt file instead
     # to use your own weights.
     fastsam_model_path:  FastSAM-s.pt
-    conf_threshold: 0.4
+    conf_threshold: 0.8
     iou_threshold: 0.9
 
     # REQUIRED for segmentor_type: mobilesam (e.g. mobile_sam.pt).
@@ -60,3 +60,19 @@ mapping_node:
     # Relative paths are resolved against the working directory the node is
     # launched from.
     output_dataset_dir: datasets/segmented_masks
+
+    # Pinhole intrinsics for back-projecting depth into 3D (TUM freiburg1
+    # defaults). Change these if you point dataset_path at a different
+    # sequence/camera.
+    fx: 517.3
+    fy: 516.5
+    cx: 318.6
+    cy: 255.3
+
+    # Per-object 3D tracking output (trajectory.txt, *_points.npy, *.png
+    # crops), one folder per tracked object id under objects_output_dir.
+    objects_output_dir: datasets/objects
+    # Max distance (metres) between a detection and an existing track's
+    # predicted position to count as the same object; beyond this, a new
+    # track/id is spawned instead.
+    track_gate_m: 0.5
