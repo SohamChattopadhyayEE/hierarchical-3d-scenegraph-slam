@@ -88,6 +88,8 @@ class MappingNode(Node):
             fy=self.get_parameter('fy').value,
             cx=self.get_parameter('cx').value,
             cy=self.get_parameter('cy').value,
+            erosion_kernel=self.get_parameter('mask_erosion_kernel').value,
+            depth_discontinuity_thresh=self.get_parameter('depth_discontinuity_thresh').value,
         )
         self.tracker = Tracker(
             output_dir=self.get_parameter('objects_output_dir').value,

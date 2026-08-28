@@ -94,7 +94,11 @@ def main():
     index_file = open(os.path.join(output_dir, 'mask.txt'), 'w')
     index_file.write('# segmentation masks\n# timestamp filename\n')
 
-    back_projector = BackProjector(params['fx'], params['fy'], params['cx'], params['cy'])
+    back_projector = BackProjector(
+        params['fx'], params['fy'], params['cx'], params['cy'],
+        erosion_kernel=params['mask_erosion_kernel'],
+        depth_discontinuity_thresh=params['depth_discontinuity_thresh'],
+    )
     tracker = Tracker(output_dir=params['objects_output_dir'], gate=params['track_gate_m'])
 
     rgb_entries = read_tum_file(os.path.join(args.dataset_path, 'rgb.txt'))

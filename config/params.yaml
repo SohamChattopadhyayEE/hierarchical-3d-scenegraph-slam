@@ -69,6 +69,13 @@ mapping_node:
     cx: 318.6
     cy: 255.3
 
+    # Cheap pre-back-projection cleanup, applied to every frame before any
+    # point reaches tracking: erosion drops mixed-pixel mask boundary
+    # pixels; discontinuity rejection drops depth "flying pixels" straddling
+    # an edge. Both stabilize the per-frame centroid the EKF tracks.
+    mask_erosion_kernel: 3          # pixels; must be odd, 0 disables erosion
+    depth_discontinuity_thresh: 0.05  # metres; local depth-gradient cutoff
+
     # Per-object 3D tracking output (trajectory.txt, *_points.npy, *.png
     # crops), one folder per tracked object id under objects_output_dir.
     objects_output_dir: datasets/objects
