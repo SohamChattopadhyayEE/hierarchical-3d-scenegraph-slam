@@ -75,4 +75,4 @@ mapping_node:
     # Max distance (metres) between a detection and an existing track's
     # predicted position to count as the same object; beyond this, a new
     # track/id is spawned instead.
-    track_gate_m: 0.5
+    track_gate_m: 0.1

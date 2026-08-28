@@ -16,7 +16,7 @@ import yaml
 
 from object_segmentor.fastsam_segmentor import FastSAMSegmentor
 from object_segmentor.mobilesam_segmentor import MobileSAMSegmentor
-from object_segmentor.visualization import colorize_label_mask
+from object_segmentor.visualization import colorize_depth, colorize_label_mask
 from reconstruction_3d.back_projector import BackProjector
 from reconstruction_3d.object_tracker import Tracker
 
@@ -90,6 +90,7 @@ def main():
 
     output_dir = os.path.join(params['output_dataset_dir'], segmentor_type)
     os.makedirs(os.path.join(output_dir, 'mask'), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, 'depth_color'), exist_ok=True)
     index_file = open(os.path.join(output_dir, 'mask.txt'), 'w')
     index_file.write('# segmentation masks\n# timestamp filename\n')
 
@@ -116,6 +117,8 @@ def main():
         _, depth_fields = nearest(depth_entries, ts)
         raw = cv2.imread(os.path.join(args.dataset_path, depth_fields[0]), cv2.IMREAD_UNCHANGED)
         depth_m = raw.astype(np.float32) / depth_scale
+        cv2.imwrite(os.path.join(output_dir, 'depth_color', f'{stamp_str}.png'),
+                    colorize_depth(depth_m))
 
         _, gt_fields = nearest(gt_entries, ts)
         tx, ty, tz, qx, qy, qz, qw = (float(x) for x in gt_fields)

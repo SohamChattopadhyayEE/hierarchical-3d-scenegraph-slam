@@ -24,7 +24,7 @@ from sensor_msgs.msg import Image, Imu
 from object_segmentor.fastsam_segmentor import FastSAMSegmentor
 from object_segmentor.mobilesam_segmentor import MobileSAMSegmentor
 from object_segmentor.object_segmentor_base import ObjectSegmentorBase
-from object_segmentor.visualization import colorize_label_mask
+from object_segmentor.visualization import colorize_depth, colorize_label_mask
 from reconstruction_3d.back_projector import BackProjector
 from reconstruction_3d.object_tracker import Tracker
 
@@ -77,6 +77,7 @@ class MappingNode(Node):
         self.output_dir = os.path.join(
             self.get_parameter('output_dataset_dir').value, segmentor_type)
         os.makedirs(os.path.join(self.output_dir, 'mask'), exist_ok=True)
+        os.makedirs(os.path.join(self.output_dir, 'depth_color'), exist_ok=True)
         self.index_file = open(os.path.join(self.output_dir, 'mask.txt'), 'w')
         self.index_file.write('# segmentation masks\n# timestamp filename\n')
 
@@ -159,6 +160,7 @@ class MappingNode(Node):
             depth_msg, odom_msg = self._latest_depth, self._latest_odom
             if depth_msg is not None and odom_msg is not None:
                 depth_m = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding='32FC1')
+                self._save_depth_color(header, colorize_depth(depth_m))
                 pose = odom_msg.pose.pose
                 R = _quat_to_matrix(pose.orientation)
                 t = np.array([pose.position.x, pose.position.y, pose.position.z])
@@ -179,6 +181,10 @@ class MappingNode(Node):
         cv2.imwrite(os.path.join(self.output_dir, filename), label_mask)
         self.index_file.write(f'{stamp_str} {filename}\n')
         self.index_file.flush()
+
+    def _save_depth_color(self, header, depth_color: np.ndarray):
+        stamp_str = f'{header.stamp.sec + header.stamp.nanosec * 1e-9:.6f}'
+        cv2.imwrite(os.path.join(self.output_dir, 'depth_color', f'{stamp_str}.png'), depth_color)
 
     def destroy_node(self):
         self._running = False

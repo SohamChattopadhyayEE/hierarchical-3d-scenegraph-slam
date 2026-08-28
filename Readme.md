@@ -53,8 +53,29 @@ python3 mapping_from_file.py datasets/rgbd_dataset_freiburg1_desk
 
 ## Testing / debugging
 
+Needs `matplotlib` (all viewers) and `scipy` (the two reconstruction viewers):
 ```
-python3 test_modules/test_fastsam.py       # FastSAMSegmentor on one frame
-python3 test_modules/test_mobilesam.py     # MobileSAMSegmentor on one frame
+pip install matplotlib scipy
+```
+
+```
+# Run a segmentor directly on one dataset frame, no ROS -- saves the raw
+# mask + a colorized visualization locally in test_modules/.
+python3 test_modules/test_fastsam.py
+python3 test_modules/test_mobilesam.py
+
+# Single frame: one object's 3D points from one timestamp.
 python3 test_modules/view_pointcloud.py datasets/objects/<id>/<ts>_points.npy
+
+# Step through one object's frames with Right/Left: point cloud (textured
+# from its crop) and the original image, side by side, updating together.
+python3 test_modules/view_multiview_pointcloud.py datasets/objects/<id>
+
+# Combine several objects' RECONSTRUCTED (denoised/densified, see below),
+# textured point clouds into one shared-frame 3D scene.
+python3 test_modules/view_objects_map.py datasets/objects <id1> <id2> ...
+
+# One object: raw-fused vs. reconstruction_3d/reconstruct.py's cleaned
+# reconstruction, both textured, side by side.
+python3 test_modules/view_reconstructed_object.py datasets/objects/<id>
 ```

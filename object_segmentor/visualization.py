@@ -1,12 +1,12 @@
-"""Turns a uint16 instance-id label mask into an RGB image for viewing.
+"""Turns segmentation/depth data into viewable color images.
 
-Shared by mapping_node.py (saved/published visualization) and
-test_modules/test_fastsam.py (local inspection) -- both need the same
-label-id -> color mapping.
+Shared by mapping_node.py / mapping_from_file.py (saved visualizations) and
+test_modules/*.py (local inspection).
 """
 
 import colorsys
 
+import cv2
 import numpy as np
 
 
@@ -32,3 +32,14 @@ def colorize_label_mask(label_mask: np.ndarray) -> np.ndarray:
         color[label_mask == instance_id] = (int(b * 255), int(g * 255), int(r * 255))
 
     return color
+
+
+def colorize_depth(depth_m: np.ndarray, max_depth_m: float = 5.0) -> np.ndarray:
+    """Maps a float depth image (metres) to a viewable BGR jet-colormap image.
+
+    Near = red, far = blue (standard depth-visualization convention); invalid
+    pixels (depth <= 0) clip to 0 and show as the colormap's low end.
+    """
+    clipped = np.clip(depth_m, 0, max_depth_m)
+    normalized = (clipped / max_depth_m * 255).astype(np.uint8)
+    return cv2.applyColorMap(normalized, cv2.COLORMAP_JET)
