@@ -75,10 +75,11 @@ class Tracker:
                 match.update(centroid_world)
 
             self._save(match.id, timestamp, match.position, points_world,
-                       rgb, label_mask == instance_id)
+                       rgb, label_mask == instance_id, R_cam2world, t_cam2world)
 
     def _save(self, obj_id: int, timestamp: float, centroid: np.ndarray,
-              points_world: np.ndarray, rgb: np.ndarray, obj_mask: np.ndarray):
+              points_world: np.ndarray, rgb: np.ndarray, obj_mask: np.ndarray,
+              R_cam2world: np.ndarray, t_cam2world: np.ndarray):
         folder = os.path.join(self.output_dir, str(obj_id))
         os.makedirs(folder, exist_ok=True)
         stamp = f'{timestamp:.6f}'
@@ -89,5 +90,15 @@ class Tracker:
         np.save(os.path.join(folder, f'{stamp}_points.npy'), points_world)
 
         ys, xs = np.where(obj_mask)
-        crop = rgb[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+        x_min, y_min, x_max, y_max = xs.min(), ys.min(), xs.max(), ys.max()
+        crop = rgb[y_min:y_max + 1, x_min:x_max + 1]
         cv2.imwrite(os.path.join(folder, f'{stamp}.png'), crop)
+
+        # Camera pose + this crop's bounding box in the full frame -- lets a
+        # later stage (e.g. GaussianSplatter) reconstruct the posed View
+        # (T_world_cam, K adjusted for the crop offset, image) this frame's
+        # crop corresponds to, without needing anything beyond what's
+        # already saved here plus the global camera intrinsics.
+        np.savez(os.path.join(folder, f'{stamp}_pose.npz'),
+                 R=R_cam2world, t=t_cam2world,
+                 bbox=np.array([x_min, y_min, x_max, y_max]))

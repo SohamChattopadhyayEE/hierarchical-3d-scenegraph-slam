@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Reconstructs one tracked object's shape from its accumulated per-frame
 point clouds (reconstruction_3d/reconstruct.py's multi-view fusion +
-consistency filtering) and shows raw-fused vs. reconstructed side by side.
+consistency filtering) and shows raw-fused vs. reconstructed side by side,
+then its dense reconstruction two ways: reconstruction_3d/poisson_mesher.py's
+PoissonMesher, and reconstruction_3d/gaussian_splatter.py's GaussianSplatter
+-- real, trained 3D Gaussian Splatting (needs CUDA + gsplat; posed views are
+built by that module's load_views() from what Tracker._save writes per
+frame: <ts>.png crops + <ts>_pose.npz camera pose/bbox).
 
 Each raw point is colored by its frame's original image texture (same
 lookup as view_multiview_pointcloud.py's texture_colors). reconstruct_object
@@ -20,13 +25,17 @@ import sys
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+import yaml
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  -- registers the '3d' projection
 from scipy.spatial import cKDTree
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from view_multiview_pointcloud import texture_colors  # noqa: E402
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
 from reconstruction_3d.reconstruct import reconstruct_object  # noqa: E402
+from reconstruction_3d.poisson_mesher import PoissonMesher  # noqa: E402
+from reconstruction_3d.gaussian_splatter import GaussianSplatter, load_views  # noqa: E402
 
 
 def main():
@@ -76,6 +85,29 @@ def main():
 
     fig.suptitle(sys.argv[1])
     plt.show()
+
+    print("Running Poisson reconstruction for a dense mesh...")
+    mesh = PoissonMesher().reconstruct(clean, clean_colors)
+    print(f"mesh: {len(mesh.vertices)} vertices, {len(mesh.triangles)} triangles")
+
+    import open3d as o3d
+    o3d.visualization.draw_geometries([mesh], window_name=f"{sys.argv[1]} -- Poisson mesh")
+
+    print("Fitting Gaussian Splatting (alternative to Poisson; needs CUDA + gsplat)...")
+    with open(os.path.join(REPO_ROOT, 'config', 'params.yaml')) as f:
+        cam = yaml.safe_load(f)['mapping_node']['ros__parameters']
+    views = load_views(sys.argv[1], cam['fx'], cam['fy'], cam['cx'], cam['cy'])
+    if not views:
+        print(f"no *_pose.npz files in {sys.argv[1]} -- run the pipeline again "
+              "after this change to produce them, skipping Gaussian Splatting")
+    else:
+        gs = GaussianSplatter().reconstruct(clean, clean_colors, views)
+        ply_path = os.path.join(sys.argv[1], 'gaussian_splat.ply')
+        gs.export_ply(ply_path)
+        print(f"saved {ply_path}")
+        o3d.visualization.draw_geometries(
+            [o3d.io.read_point_cloud(ply_path)],
+            window_name=f"{sys.argv[1]} -- Gaussian splats")
 
 
 if __name__ == '__main__':

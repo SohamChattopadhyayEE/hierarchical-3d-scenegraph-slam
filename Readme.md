@@ -53,10 +53,18 @@ python3 mapping_from_file.py datasets/rgbd_dataset_freiburg1_desk
 
 ## Testing / debugging
 
-Needs `matplotlib` (all viewers) and `scipy` (the two reconstruction viewers):
+Needs `matplotlib` (all viewers), `scipy` (the two reconstruction viewers),
+and `open3d` (Poisson/splat viewing, same two):
 ```
-pip install matplotlib scipy
+pip install matplotlib scipy open3d
 ```
+The Gaussian Splatting step in those same two viewers is real, trained 3DGS
+(not just an init) and additionally needs a CUDA GPU + `gsplat`:
+```
+pip install gsplat
+```
+Objects tracked before `object_tracker.py`'s pose-saving change (no
+`<ts>_pose.npz` files in their folder) are skipped for that step.
 
 ```
 # Run a segmentor directly on one dataset frame, no ROS -- saves the raw
@@ -71,11 +79,17 @@ python3 test_modules/view_pointcloud.py datasets/objects/<id>/<ts>_points.npy
 # from its crop) and the original image, side by side, updating together.
 python3 test_modules/view_multiview_pointcloud.py datasets/objects/<id>
 
-# Combine several objects' RECONSTRUCTED (denoised/densified, see below),
-# textured point clouds into one shared-frame 3D scene.
+# Combine several objects' RECONSTRUCTED (denoised/densified) point clouds
+# into one shared-frame 3D scene, then show each one's Poisson mesh together
+# in a second window, then each one's trained Gaussian splat in a third.
 python3 test_modules/view_objects_map.py datasets/objects <id1> <id2> ...
 
 # One object: raw-fused vs. reconstruction_3d/reconstruct.py's cleaned
-# reconstruction, both textured, side by side.
+# reconstruction (textured, side by side), then its dense Poisson mesh, then
+# its trained Gaussian Splat (alternative to Poisson, real photometric 3DGS
+# via gsplat), each in its own open3d window.
 python3 test_modules/view_reconstructed_object.py datasets/objects/<id>
+
+Example:
+python3 test_modules/combined_complete_map.py datasets/objects 22 25 27 30 32 42 43 46 55 79 93 101 105 118 122 123 125 127 129 133 136 134 141 145 149 157 164 165 176 178 179 181 186 192 198 199 201 202 203 204 211 213 219 221 224 225 228 231
 ```

@@ -5,11 +5,26 @@ saves points transformed by each frame's own pose) -- into one 3D scene.
 
 Each object's raw per-frame clouds are cleaned/densified by
 reconstruction_3d/reconstruct.py's reconstruct_object() (multi-view fusion +
-consistency filtering). That step only outputs geometry (voxel-averaged
-points, not the original ones), so color isn't carried through it -- instead,
-each raw point is first colored by its original image texture (same lookup
-as view_multiview_pointcloud.py's texture_colors), and each reconstructed
-point then borrows the color of its nearest raw point (scipy cKDTree).
+consistency filtering), then reconstructed separately -- one object at a
+time, not all of them fused into one solve, since each is its own coherent
+surface -- by two alternative dense-reconstruction methods:
+  - reconstruction_3d/poisson_mesher.py's PoissonMesher
+  - reconstruction_3d/gaussian_splatter.py's GaussianSplatter -- real,
+    trained 3D Gaussian Splatting (needs CUDA + gsplat; posed views are
+    built by that module's load_views() from what Tracker._save writes per
+    frame: <ts>.png crops + <ts>_pose.npz camera pose/bbox). Objects with
+    no *_pose.npz files (data saved before this feature existed) are
+    skipped for this step.
+reconstruct_object() only outputs geometry (voxel-averaged points, not the
+original ones), so color isn't carried through it -- instead, each raw point
+is first colored by its original image texture (same lookup as
+view_multiview_pointcloud.py's texture_colors), and each reconstructed point
+then borrows the color of its nearest raw point (scipy cKDTree) before
+either reconstruction, so both come out colored.
+
+Shows the reconstructed point clouds (matplotlib) first, then all objects'
+Poisson meshes together in one open3d window, then all objects' fitted
+Gaussian splats together in another, once each preceding window is closed.
 
 Usage: python3 test_modules/view_objects_map.py datasets/objects 3 7 12
 """
@@ -22,13 +37,17 @@ import sys
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+import yaml
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  -- registers the '3d' projection
 from scipy.spatial import cKDTree
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from view_multiview_pointcloud import texture_colors  # noqa: E402
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
 from reconstruction_3d.reconstruct import reconstruct_object  # noqa: E402
+from reconstruction_3d.poisson_mesher import PoissonMesher  # noqa: E402
+from reconstruction_3d.gaussian_splatter import GaussianSplatter, load_views  # noqa: E402
 
 
 def load_object(folder: str):
@@ -61,7 +80,11 @@ def main():
     parser.add_argument('object_ids', nargs='+')
     args = parser.parse_args()
 
-    all_points, all_colors = [], []
+    with open(os.path.join(REPO_ROOT, 'config', 'params.yaml')) as f:
+        cam = yaml.safe_load(f)['mapping_node']['ros__parameters']
+
+    mesher = PoissonMesher()
+    all_points, all_colors, meshes, splat_clouds = [], [], [], []
     for obj_id in args.object_ids:
         folder = os.path.join(args.objects_root, str(obj_id))
         clouds, raw_points, raw_colors = load_object(folder)
@@ -81,6 +104,27 @@ def main():
         all_points.append(reconstructed)
         all_colors.append(colors)
 
+        # Each object is its own coherent surface -- mesh separately, not
+        # all objects fused into one Poisson solve. Every mesh stays in the
+        # shared world frame, so they combine correctly in one scene below.
+        mesh = mesher.reconstruct(reconstructed, colors)
+        print(f"object {obj_id}: mesh with {len(mesh.vertices)} vertices")
+        meshes.append(mesh)
+
+        # Alternative to the Poisson mesh, same per-object separation. Needs
+        # a fresh GaussianSplatter per object (it holds per-fit optimizer
+        # state) and posed views (needs CUDA + gsplat).
+        views = load_views(folder, cam['fx'], cam['fy'], cam['cx'], cam['cy'])
+        if not views:
+            print(f"object {obj_id}: no *_pose.npz found, skipping Gaussian Splatting")
+        else:
+            gs = GaussianSplatter().reconstruct(reconstructed, colors, views)
+            ply_path = os.path.join(folder, 'gaussian_splat.ply')
+            gs.export_ply(ply_path)
+            print(f"object {obj_id}: saved {ply_path}")
+            import open3d as o3d
+            splat_clouds.append(o3d.io.read_point_cloud(ply_path))
+
     if not all_points:
         print("Nothing to show.")
         sys.exit(1)
@@ -96,6 +140,13 @@ def main():
     ax.set_zlabel('z')
     ax.set_title(f"objects {', '.join(args.object_ids)}  ({points.shape[0]} points, reconstructed)")
     plt.show()
+
+    import open3d as o3d
+    o3d.visualization.draw_geometries(
+        meshes, window_name=f"objects {', '.join(args.object_ids)} -- Poisson meshes")
+    if splat_clouds:
+        o3d.visualization.draw_geometries(
+            splat_clouds, window_name=f"objects {', '.join(args.object_ids)} -- Gaussian splats")
 
 
 if __name__ == '__main__':
