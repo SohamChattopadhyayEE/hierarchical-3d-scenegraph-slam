@@ -194,8 +194,11 @@ class GaussianSplatter:
         strategy.check_sanity(self.params, self.optimizers)
         state = strategy.initialize_state()
 
-        gt = [torch.tensor(v.image, dtype=torch.float32, device=self.device)
-              for v in views]
+        # Ground truth stays on the CPU -- only the one view sampled per step
+        # is moved to the GPU. Holding all of them resident costs
+        # len(views) * H*W*3 * 4 bytes of VRAM for no benefit (453 MB for 123
+        # 640x480 views), which matters on a small card.
+        gt = [torch.tensor(v.image, dtype=torch.float32) for v in views]
 
         for step in range(self.iters):
             i = np.random.randint(len(views))
@@ -203,7 +206,7 @@ class GaussianSplatter:
 
             # strategy needs the 2D-means gradient retained for its ADC decisions
             strategy.step_pre_backward(self.params, self.optimizers, state, step, info)
-            loss = torch.abs(render - gt[i]).mean()             # L1 photometric
+            loss = torch.abs(render - gt[i].to(self.device)).mean()   # L1 photometric
             for opt in self.optimizers.values():
                 opt.zero_grad(set_to_none=True)
             loss.backward()

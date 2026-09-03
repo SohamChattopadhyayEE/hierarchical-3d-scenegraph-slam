@@ -59,7 +59,7 @@ mapping_node:
     # <segmentor_type> is appended automatically, e.g. datasets/segmented_masks/fastsam.
     # Relative paths are resolved against the working directory the node is
     # launched from.
-    output_dataset_dir: datasets/segmented_masks
+    output_dataset_dir: datasets/segmented_masks_size_gated
 
     # Pinhole intrinsics for back-projecting depth into 3D (TUM freiburg1
     # defaults). Change these if you point dataset_path at a different
@@ -76,9 +76,15 @@ mapping_node:
     mask_erosion_kernel: 3          # pixels; must be odd, 0 disables erosion
     depth_discontinuity_thresh: 0.05  # metres; local depth-gradient cutoff
 
+    # Object selection: drop masks/tracks too small or short-lived to be a
+    # main, significant object -- keeps segmentation flicker and slivers
+    # out of the map rather than filtering them after the fact.
+    min_area: 3000            # px; a mask smaller than this is never back-projected
+    min_track_length: 5       # frames; a track shorter than this is never saved
+
     # Per-object 3D tracking output (trajectory.txt, *_points.npy, *.png
     # crops), one folder per tracked object id under objects_output_dir.
-    objects_output_dir: datasets/objects
+    objects_output_dir: datasets/objects_size_gated
     # Max distance (metres) between a detection and an existing track's
     # predicted position to count as the same object; beyond this, a new
     # track/id is spawned instead.

@@ -14,6 +14,7 @@ object boundaries than reconstructing each object in isolation.
 Usage: python3 test_modules/combined_complete_map.py datasets/objects 3 7 12
        python3 test_modules/combined_complete_map.py datasets/objects 3 7 12 \
            --iters 4000 --output datasets/objects/combined_map.ply
+       python3 test_modules/combined_complete_map.py datasets/objects --all
 """
 
 import argparse
@@ -50,21 +51,42 @@ def load_object(folder: str):
     return clouds, colors_all
 
 
+def discover_object_ids(objects_root: str) -> list:
+    """Every subfolder of objects_root that actually holds tracked-object
+    output (skips stray files like a previous combined_map.ply)."""
+    ids = [d for d in os.listdir(objects_root)
+           if os.path.isdir(os.path.join(objects_root, d))
+           and glob.glob(os.path.join(objects_root, d, '*_points.npy'))]
+    return sorted(ids, key=lambda d: int(d) if d.isdigit() else d)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('objects_root', help='e.g. datasets/objects')
-    parser.add_argument('object_ids', nargs='+')
+    parser.add_argument('object_ids', nargs='*',
+                         help='object ids to include (ignored if --all is given)')
+    parser.add_argument('--all', action='store_true',
+                         help='use every object folder under objects_root instead '
+                              'of listing ids')
     parser.add_argument('--iters', type=int, default=2000)
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--output', default=None,
                          help='defaults to <objects_root>/combined_map.ply')
     args = parser.parse_args()
 
+    if args.all:
+        object_ids = discover_object_ids(args.objects_root)
+        print(f"--all: found {len(object_ids)} object folders under {args.objects_root}")
+    elif args.object_ids:
+        object_ids = args.object_ids
+    else:
+        parser.error('provide object_ids or use --all')
+
     with open(os.path.join(REPO_ROOT, 'config', 'params.yaml')) as f:
         cam = yaml.safe_load(f)['mapping_node']['ros__parameters']
 
     all_clouds, all_colors, all_views = [], [], []
-    for obj_id in args.object_ids:
+    for obj_id in object_ids:
         folder = os.path.join(args.objects_root, str(obj_id))
         clouds, colors = load_object(folder)
         if not clouds:
@@ -85,7 +107,7 @@ def main():
               "re-run the mapping pipeline to produce them (see Tracker._save).")
         sys.exit(1)
 
-    print(f"\npooling {len(args.object_ids)} objects: "
+    print(f"\npooling {len(object_ids)} objects: "
           f"{sum(c.shape[0] for c in all_clouds)} raw points, {len(all_views)} views")
 
     raw = np.concatenate(all_clouds, axis=0)
@@ -106,10 +128,12 @@ def main():
     gs.export_ply(output)
     print(f"saved {output}")
 
+    ids_label = (f"{len(object_ids)} objects" if len(object_ids) > 10
+                 else ', '.join(object_ids))
     import open3d as o3d
     o3d.visualization.draw_geometries(
         [o3d.io.read_point_cloud(output)],
-        window_name=f"combined map -- objects {', '.join(args.object_ids)}")
+        window_name=f"combined map -- objects {ids_label}")
 
 
 if __name__ == '__main__':

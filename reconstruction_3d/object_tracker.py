@@ -18,6 +18,7 @@ class TrackedObject:
         self.id = obj_id
         self.x = np.concatenate([pos_world, np.zeros(3)])
         self.P = np.eye(6) * 1.0
+        self.observations = 1  # this construction counts as the first observation
 
     def predict(self, dt: float):
         F = np.eye(6)
@@ -35,6 +36,7 @@ class TrackedObject:
         K = self.P @ H.T @ np.linalg.inv(S)
         self.x = self.x + K @ y
         self.P = (np.eye(6) - K @ H) @ self.P
+        self.observations += 1
 
     @property
     def position(self) -> np.ndarray:
@@ -43,11 +45,17 @@ class TrackedObject:
 
 class Tracker:
 
-    def __init__(self, output_dir: str, gate: float = 0.5):
+    def __init__(self, output_dir: str, gate: float = 0.5, min_track_length: int = 5):
         self.objects = {}
         self.next_id = 1
         self.output_dir = output_dir
         self.gate = gate
+        # Object selection: a track this short is more likely segmentation
+        # flicker than a real, persistent object worth putting in the map.
+        # Its first (min_track_length - 1) observations are never saved --
+        # not retroactively backfilled once it does qualify, so short-lived
+        # noise tracks leave nothing on disk at all.
+        self.min_track_length = min_track_length
         self.last_t = None
 
     def update(self, detections: dict, R_cam2world: np.ndarray, t_cam2world: np.ndarray,
@@ -74,8 +82,9 @@ class Tracker:
             else:
                 match.update(centroid_world)
 
-            self._save(match.id, timestamp, match.position, points_world,
-                       rgb, label_mask == instance_id, R_cam2world, t_cam2world)
+            if match.observations >= self.min_track_length:
+                self._save(match.id, timestamp, match.position, points_world,
+                           rgb, label_mask == instance_id, R_cam2world, t_cam2world)
 
     def _save(self, obj_id: int, timestamp: float, centroid: np.ndarray,
               points_world: np.ndarray, rgb: np.ndarray, obj_mask: np.ndarray,

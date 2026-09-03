@@ -98,8 +98,10 @@ def main():
         params['fx'], params['fy'], params['cx'], params['cy'],
         erosion_kernel=params['mask_erosion_kernel'],
         depth_discontinuity_thresh=params['depth_discontinuity_thresh'],
+        min_area=params['min_area'],
     )
-    tracker = Tracker(output_dir=params['objects_output_dir'], gate=params['track_gate_m'])
+    tracker = Tracker(output_dir=params['objects_output_dir'], gate=params['track_gate_m'],
+                       min_track_length=params['min_track_length'])
 
     rgb_entries = read_tum_file(os.path.join(args.dataset_path, 'rgb.txt'))
     depth_entries = read_tum_file(os.path.join(args.dataset_path, 'depth.txt'))

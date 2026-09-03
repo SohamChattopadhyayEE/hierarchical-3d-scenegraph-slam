@@ -90,10 +90,12 @@ class MappingNode(Node):
             cy=self.get_parameter('cy').value,
             erosion_kernel=self.get_parameter('mask_erosion_kernel').value,
             depth_discontinuity_thresh=self.get_parameter('depth_discontinuity_thresh').value,
+            min_area=self.get_parameter('min_area').value,
         )
         self.tracker = Tracker(
             output_dir=self.get_parameter('objects_output_dir').value,
             gate=self.get_parameter('track_gate_m').value,
+            min_track_length=self.get_parameter('min_track_length').value,
         )
 
         # _latest_odom is consumed for 3D back-projection/tracking below;
