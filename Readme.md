@@ -1,9 +1,15 @@
 # hierarchical-3d-scenegraph-slam
 
+![Room mapping demo](assets/demo_room_mapping.gif)
+
 RGB-D dataset streaming, unsupervised instance segmentation (FastSAM /
 MobileSAM), 3D back-projection + EKF object tracking, and dense
 reconstruction (Poisson / Gaussian Splatting / RANSAC planes), built against
 ROS 2 Jazzy and the TUM `rgbd_dataset_freiburg1_desk` sequence.
+
+The demo above (`demo.py`) streams the RGB frames on the left while the 3D
+map builds up on the right -- objects appearing one at a time, the camera
+trajectory tracing out, and the extracted planes dropping in at the end.
 
 ## Setup
 
